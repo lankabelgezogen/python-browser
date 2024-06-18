@@ -3,6 +3,8 @@ import sys
 import ssl
 import os
 import time
+import gzip
+import io
 
 class RedirectLoopError(Exception):
     pass
@@ -98,7 +100,8 @@ class URL:
                 "host": self.host,
                 #"connection": "close",
                 "content-length": "0",
-                "user-agent": "LanKabel/1.0"
+                "user-agent": "LanKabel/1.0",
+                "accept-encoding": "gzip"
             }
 
             for header, value in headers.items():
@@ -110,7 +113,7 @@ class URL:
             request += "\r\n"
             s.send(request.encode('utf-8'))
 
-            response = s.makefile('r', encoding='utf-8', newline='\r\n')
+            response = s.makefile('rb', encoding='utf-8', newline='\r\n')
 
             statusline = response.readline()
             version, status, explanation = statusline.split(' ', 2)
@@ -122,9 +125,17 @@ class URL:
                     break
                 header, value = line.split(":", 1)
                 response_headers[header.casefold()] = value.strip()
-            
-            assert "transfer-encoding" not in response_headers
-            assert "content-encoding" not in response_headers
+
+            if "transfer-encoding" in response_headers and response_headers["transfer-encoding"] == "chunked":
+                content = self._read_chunked(response)
+            else:
+                content_length = int(response_headers.get("content-length", 0))
+                content = response.read(content_length)
+
+            if "content-encoding" in response_headers and response_headers["content-encoding"] == "gzip":
+                content = gzip.decompress(content)
+            else:
+                content = content
 
             if status in ["301", "302", "303", "307", "308"]:
                 if "location" in response_headers:
@@ -132,9 +143,6 @@ class URL:
                     new_url = URL(location if "://" in location else f"{self.scheme}://{self.host}:{self.port}{location}")
                     new_url.socket = s
                     return new_url.request(headers, redirect_count + 1, visited_urls)
-
-            content_length = int(response_headers.get("content-length", 0))
-            content = response.read(content_length)
 
             cache_control = response_headers.get("cache-control", "")
             if "no-store" not in cache_control:
@@ -163,6 +171,20 @@ class URL:
             
         elif self.scheme == "data":
             return self.data
+        
+    def _read_chunked(self, response):
+        content = b""
+        while True:
+            chunk_size_line = response.readline()
+            if chunk_size_line == '':
+                continue
+            chunk_size = int(chunk_size_line, 16)
+            if chunk_size == 0:
+                break
+            chunk_data = response.read(chunk_size)
+            content += chunk_data
+            response.read(2) # trailing CRLF (carriage return, line feed)
+        return content
     
     def __repr__(self):
         return "URL(scheme={}, host={}, port={}, path={!r})".format(
