@@ -9,6 +9,7 @@ class URL:
         self.host = None
         self.port = None
         self.path = None
+        self.socket = None
         self.view_source = False
 
         if url.startswith("data:"):
@@ -20,8 +21,16 @@ class URL:
             url = url.split(":", 1)[1]
             self.view_source = True
 
+        if url.startswith("file:"):
+            self.scheme = "file"
+            url = url.split(":", 1)[1]
+            if os.name == "nt" and url.startswith("/"):
+                url = url.lstrip("/")
+            self.path = url
+            return
+
         self.scheme, url = url.split('://', 1)
-        assert self.scheme in ["http", "https", "file"]
+        assert self.scheme in ["http", "https"]
 
         if self.scheme in ["http", "https"]:
             if self.scheme == "https":
@@ -36,29 +45,28 @@ class URL:
 
             if ":" in self.host:
                 self.host, port = self.host.split(':', 1)
-                self.port = int(port)
-
-        elif self.scheme == "file":
-            if os.name == "nt" and url.startswith("/"):
-                path = url[1:]
-            self.path = path
+                self.port = int(port)            
 
     def request(self, headers={}):
         if self.scheme in ["http", "https"]:
-            s = socket.socket(
-                family=socket.AF_INET,
-                type=socket.SOCK_STREAM,
-                proto=socket.IPPROTO_TCP,
-            )
-            s.connect((self.host, self.port))
+            if self.socket is None:
+                s = socket.socket(
+                    family=socket.AF_INET,
+                    type=socket.SOCK_STREAM,
+                    proto=socket.IPPROTO_TCP,
+                )
+                s.connect((self.host, self.port))
 
-            if self.scheme == "https":
-                ctx = ssl.create_default_context()
-                s = ctx.wrap_socket(s, server_hostname=self.host)
+                if self.scheme == "https":
+                    ctx = ssl.create_default_context()
+                    s = ctx.wrap_socket(s, server_hostname=self.host)
+            else:
+                s = self.socket
 
             request = "GET {} HTTP/1.0\r\n".format(self.path)
             request += "Host: {}\r\n".format(self.host)
-            request += "Connection: close\r\n"
+            #request += "Connection: close\r\n"
+            request += "Content-Length: 0\r\n"
             request += "User-Agent: LanKabel/1.0\r\n"
             for header, value in headers.items():
                 request += "{}: {}\r\n".format(header, value)
@@ -81,8 +89,11 @@ class URL:
             assert "transfer-encoding" not in response_headers
             assert "content-encoding" not in response_headers
 
-            content = response.read()
-            s.close()
+            content_length = int(response_headers.get("content-length", 0))
+            content = response.read(content_length)
+            
+            self.socket = s
+            #s.close()
 
             return content
         
@@ -90,13 +101,17 @@ class URL:
             try:
                 with open(self.path, "r") as f:
                     return f.read()
-            except FileNotFoundError:
-                return "404 Not Found"
+            except FileNotFoundError as e:
+                return f'FileNotFoundError: {str(e)}'
             except Exception as e:
                 return str(e)
             
         elif self.scheme == "data":
             return self.data
+    
+    def __repr__(self):
+        return "URL(scheme={}, host={}, port={}, path={!r})".format(
+            self.scheme, self.host, self.port, self.path)
 
 def show(body):
     res = ""

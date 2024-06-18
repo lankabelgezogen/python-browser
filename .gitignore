@@ -1,1 +1,4 @@
 /index.html
+/__init__.py
+/local_file.txt
+__pycache__
