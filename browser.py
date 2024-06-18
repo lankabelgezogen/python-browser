@@ -5,17 +5,23 @@ import os
 
 class URL:
     def __init__(self, url="file:///index.html"):
+        
+        self.host = None
+        self.port = None
+        self.path = None
+        self.view_source = False
+
         if url.startswith("data:"):
             self.scheme = "data"
             self.data = url.split(":", 1)[1]
             return
+        
+        if url.startswith("view-source:"):
+            url = url.split(":", 1)[1]
+            self.view_source = True
 
         self.scheme, url = url.split('://', 1)
         assert self.scheme in ["http", "https", "file"]
-
-        self.host = None
-        self.port = None
-        self.path = None
 
         if self.scheme in ["http", "https"]:
             if self.scheme == "https":
@@ -108,9 +114,15 @@ def show(body):
     res = res.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
     print(res)
 
+def view_source(body):
+    print(body)
+
 def load(url):
     body = url.request()
-    show(body)
+    if url.view_source:
+        view_source(body)
+    else:
+        show(body)
 
 if __name__ == "__main__":
     load(URL(sys.argv[1]))
