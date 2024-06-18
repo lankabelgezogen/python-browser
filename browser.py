@@ -113,14 +113,14 @@ class URL:
             request += "\r\n"
             s.send(request.encode('utf-8'))
 
-            response = s.makefile('rb', encoding='utf-8', newline='\r\n')
+            response = s.makefile('rb', newline='\r\n')
 
-            statusline = response.readline()
+            statusline = response.readline().decode('utf-8')
             version, status, explanation = statusline.split(' ', 2)
 
             response_headers = {}
             while True:
-                line = response.readline()
+                line = response.readline().decode('utf-8')
                 if line == '\r\n':
                     break
                 header, value = line.split(":", 1)
@@ -133,9 +133,9 @@ class URL:
                 content = response.read(content_length)
 
             if "content-encoding" in response_headers and response_headers["content-encoding"] == "gzip":
-                content = gzip.decompress(content)
+                content = gzip.decompress(content).decode('utf-8')
             else:
-                content = content
+                content = content.decode('utf-8')
 
             if status in ["301", "302", "303", "307", "308"]:
                 if "location" in response_headers:
@@ -203,7 +203,7 @@ def show(body):
             #print(c, end="")
             res += c
             
-    res = res.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
+    res = res.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&").replace("&nbsp;", " ")
     print(res)
 
 def view_source(body):
