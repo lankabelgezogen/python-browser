@@ -3,6 +3,9 @@ import sys
 import ssl
 import os
 
+class RedirectLoopError(Exception):
+    pass
+
 class URL:
     def __init__(self, url="file:///index.html"):
         
@@ -47,7 +50,19 @@ class URL:
                 self.host, port = self.host.split(':', 1)
                 self.port = int(port)            
 
-    def request(self, headers={}):
+    def request(self, headers={}, redirect_count=0, visited_urls=None):
+        MAX_REDIRECTS = 10
+        if redirect_count > MAX_REDIRECTS:
+            raise RedirectLoopError("Too many redirects")
+        
+        if visited_urls is None:
+            visited_urls = set()
+        
+        current_url = f"{self.scheme}://{self.host}:{self.port}{self.path}"
+        if current_url in visited_urls:
+            raise RedirectLoopError("Redirect loop detected")
+        visited_urls.add(current_url)
+
         if self.scheme in ["http", "https"]:
             if self.socket is None:
                 s = socket.socket(
@@ -96,6 +111,13 @@ class URL:
             
             assert "transfer-encoding" not in response_headers
             assert "content-encoding" not in response_headers
+
+            if status in ["301", "302", "303", "307", "308"]:
+                if "location" in response_headers:
+                    location = response_headers["location"]
+                    new_url = URL(location if "://" in location else f"{self.scheme}://{self.host}:{self.port}{location}")
+                    new_url.socket = s
+                    return new_url.request(headers, redirect_count + 1, visited_urls)
 
             content_length = int(response_headers.get("content-length", 0))
             content = response.read(content_length)
