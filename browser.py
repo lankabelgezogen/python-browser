@@ -63,13 +63,21 @@ class URL:
             else:
                 s = self.socket
 
-            request = "GET {} HTTP/1.0\r\n".format(self.path)
-            request += "Host: {}\r\n".format(self.host)
-            #request += "Connection: close\r\n"
-            request += "Content-Length: 0\r\n"
-            request += "User-Agent: LanKabel/1.0\r\n"
+            request = "GET {} HTTP/1.1\r\n".format(self.path)
+
+            unique_headers = {
+                "host": self.host,
+                #"connection": "close",
+                "content-length": "0",
+                "user-agent": "LanKabel/1.0"
+            }
+
             for header, value in headers.items():
-                request += "{}: {}\r\n".format(header, value)
+                unique_headers[header.lower()] = value
+
+            for header, value in unique_headers.items():
+                request += "{}: {}\r\n".format(header.title(), value)
+
             request += "\r\n"
             s.send(request.encode('utf-8'))
 
