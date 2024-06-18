@@ -2,11 +2,21 @@ import socket
 import sys
 import ssl
 import os
+import time
 
 class RedirectLoopError(Exception):
     pass
 
+class CacheEntry:
+    def __init__(self, content, max_age):
+        self.content = content
+        self.expiry_time = time.time() + max_age if max_age is not None else None
+    def is_expired(self):
+        return self.expiry_time is not None and time.time() >= self.expiry_time
+
 class URL:
+    cache = {}
+
     def __init__(self, url="file:///index.html"):
         
         self.host = None
@@ -62,6 +72,10 @@ class URL:
         if current_url in visited_urls:
             raise RedirectLoopError("Redirect loop detected")
         visited_urls.add(current_url)
+
+        cache_entry = URL.cache.get(current_url)
+        if cache_entry and not cache_entry.is_expired():
+            return cache_entry.content
 
         if self.scheme in ["http", "https"]:
             if self.socket is None:
@@ -121,6 +135,17 @@ class URL:
 
             content_length = int(response_headers.get("content-length", 0))
             content = response.read(content_length)
+
+            cache_control = response_headers.get("cache-control", "")
+            if "no-store" not in cache_control:
+                max_age = None
+                if "max-age" in cache_control:
+                    parts = cache_control.split(",")
+                    for part in parts:
+                        if "max-age" in part:
+                            _, value = part.split("=")
+                            max_age = int(value.strip())
+                URL.cache[current_url] = CacheEntry(content, max_age)
             
             self.socket = s
             #s.close()
