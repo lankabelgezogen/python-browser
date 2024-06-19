@@ -19,6 +19,7 @@ class CacheEntry:
 
 WIDTH, HEIGHT = 800, 600
 HSTEP, VSTEP = 13, 18
+VSTEP_NEWLINE = 24
 SCROLL_STEP = 100
 
 class Browser:    
@@ -29,6 +30,7 @@ class Browser:
         self.scroll = 0
         self.window.bind("<Down>", self.scrolldown)
         self.window.bind("<Up>", self.scrollup)
+        self.window.bind("<MouseWheel>", self.mousewheel)
     
     def load(self, url):
         body = url.request()
@@ -38,20 +40,31 @@ class Browser:
 
     def draw(self):
         self.canvas.delete("all")
+        self.can_scroll_down = False
         for x, y, c in self.display_list:
-            if y > self.scroll + HEIGHT: continue
+            if y > self.scroll + HEIGHT:
+                self.can_scroll_down = True
+                continue
             if y + VSTEP < self.scroll: continue
             adjusted_y = y - self.scroll
             if adjusted_y >= 0:
-                self.canvas.create_text(x, y - self.scroll, text=c)
+                self.canvas.create_text(x, adjusted_y, text=c)
     
     def scrolldown(self, event):
-        self.scroll += SCROLL_STEP
-        self.draw()
+        if self.can_scroll_down:
+            self.scroll += SCROLL_STEP
+            self.draw()
 
     def scrollup(self, event):
-        self.scroll -= SCROLL_STEP
-        self.draw()
+        if self.scroll > 0:
+            self.scroll -= SCROLL_STEP
+            self.draw()
+    
+    def mousewheel(self, event):
+        if event.delta < 0:
+            self.scrolldown(event)
+        else:
+            self.scrollup(event)
 
 class URL:
     cache = {}
@@ -273,6 +286,10 @@ def layout(text):
     display_list = []
     cursor_x, cursor_y = HSTEP, VSTEP
     for c in text:
+        if c == "\n":
+            cursor_x = HSTEP
+            cursor_y += VSTEP_NEWLINE
+            continue
         display_list.append((cursor_x, cursor_y, c))
         cursor_x += HSTEP
         if cursor_x > WIDTH - HSTEP:
