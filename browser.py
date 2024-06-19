@@ -26,16 +26,17 @@ class Browser:
     def __init__(self):
         self.window = tkinter.Tk()
         self.canvas = tkinter.Canvas(self.window, width=WIDTH, height=HEIGHT)
-        self.canvas.pack()
+        self.canvas.pack(fill=tkinter.BOTH, expand=True)
         self.scroll = 0
         self.window.bind("<Down>", self.scrolldown)
         self.window.bind("<Up>", self.scrollup)
         self.window.bind("<MouseWheel>", self.mousewheel)
+        self.window.bind("<Configure>", self.resize)
     
     def load(self, url):
         body = url.request()
-        text = lex(body)
-        self.display_list = layout(text)
+        self.text = lex(body)
+        self.display_list = layout(self.text)
         self.draw()
 
     def draw(self):
@@ -65,6 +66,11 @@ class Browser:
             self.scrolldown(event)
         else:
             self.scrollup(event)
+
+    def resize(self, event):
+        WIDTH, HEIGHT = event.width, event.height
+        self.display_list = layout(self.text, WIDTH)
+        self.draw()
 
 class URL:
     cache = {}
@@ -282,7 +288,7 @@ def load(url):
     else:
         show(body)
 
-def layout(text):
+def layout(text, width=WIDTH):
     display_list = []
     cursor_x, cursor_y = HSTEP, VSTEP
     for c in text:
@@ -292,7 +298,7 @@ def layout(text):
             continue
         display_list.append((cursor_x, cursor_y, c))
         cursor_x += HSTEP
-        if cursor_x > WIDTH - HSTEP:
+        if cursor_x > width - HSTEP:
             cursor_x = HSTEP
             cursor_y += VSTEP
     return display_list
