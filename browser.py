@@ -50,6 +50,10 @@ class Browser:
             adjusted_y = y - self.scroll
             if adjusted_y >= 0:
                 self.canvas.create_text(x, adjusted_y, text=c)
+
+        scrollbar_height = HEIGHT / 8
+        scrollbar_y = self.scroll * HEIGHT / len(self.display_list)
+        self.canvas.create_rectangle(WIDTH - 20, scrollbar_y, WIDTH, scrollbar_y + scrollbar_height, fill="gray")
     
     def scrolldown(self, event):
         if self.can_scroll_down:
