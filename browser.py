@@ -5,6 +5,7 @@ import os
 import time
 import gzip
 import io
+import tkinter
 
 class RedirectLoopError(Exception):
     pass
@@ -15,6 +16,40 @@ class CacheEntry:
         self.expiry_time = time.time() + max_age if max_age is not None else None
     def is_expired(self):
         return self.expiry_time is not None and time.time() >= self.expiry_time
+
+WIDTH, HEIGHT = 800, 600
+HSTEP, VSTEP = 13, 18
+SCROLL_STEP = 100
+
+class Browser:    
+    def __init__(self):
+        self.window = tkinter.Tk()
+        self.canvas = tkinter.Canvas(self.window, width=WIDTH, height=HEIGHT)
+        self.canvas.pack()
+        self.scroll = 0
+        self.window.bind("<Down>", self.scrolldown)
+        self.window.bind("<Up>", self.scrollup)
+    
+    def load(self, url):
+        body = url.request()
+        text = lex(body)
+        self.display_list = layout(text)
+        self.draw()
+
+    def draw(self):
+        self.canvas.delete("all")
+        for x, y, c in self.display_list:
+            adjusted_y = y - self.scroll
+            if adjusted_y >= 0:
+                self.canvas.create_text(x, y - self.scroll, text=c)
+    
+    def scrolldown(self, event):
+        self.scroll += SCROLL_STEP
+        self.draw()
+
+    def scrollup(self, event):
+        self.scroll -= SCROLL_STEP
+        self.draw()
 
 class URL:
     cache = {}
@@ -206,6 +241,22 @@ def show(body):
     res = res.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&").replace("&nbsp;", " ")
     print(res)
 
+def lex(body):
+    res = ""
+    in_tag = False
+
+    for c in body:
+        if c == "<":
+            in_tag = True
+        elif c == ">":
+            in_tag = False
+        elif not in_tag:
+            #print(c, end="")
+            res += c
+            
+    res = res.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&").replace("&nbsp;", " ")
+    return res
+
 def view_source(body):
     print(body)
 
@@ -216,5 +267,18 @@ def load(url):
     else:
         show(body)
 
+def layout(text):
+    display_list = []
+    cursor_x, cursor_y = HSTEP, VSTEP
+    for c in text:
+        display_list.append((cursor_x, cursor_y, c))
+        cursor_x += HSTEP
+        if cursor_x > WIDTH - HSTEP:
+            cursor_x = HSTEP
+            cursor_y += VSTEP
+    return display_list
+
 if __name__ == "__main__":
-    load(URL(sys.argv[1]))
+    #load(URL(sys.argv[1]))
+    Browser().load(URL(sys.argv[1]))
+    tkinter.mainloop()
