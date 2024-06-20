@@ -6,6 +6,7 @@ import time
 import gzip
 import io
 import tkinter
+import tkinter.font
 
 class RedirectLoopError(Exception):
     pass
@@ -32,6 +33,12 @@ class Browser:
         self.window.bind("<Up>", self.scrollup)
         self.window.bind("<MouseWheel>", self.mousewheel)
         self.window.bind("<Configure>", self.resize)
+        bi_times = tkinter.font.Font(
+            size=16,
+            family="Courier New",
+            weight="bold",
+            slant="italic",
+        )
     
     def load(self, url):
         body = url.request()
@@ -49,7 +56,7 @@ class Browser:
             if y + VSTEP < self.scroll: continue
             adjusted_y = y - self.scroll
             if adjusted_y >= 0:
-                self.canvas.create_text(x, adjusted_y, text=c)
+                self.canvas.create_text(x, adjusted_y, text=c, font="bi_times", anchor="nw")
 
         scrollbar_height = HEIGHT / 8
         scrollbar_y = self.scroll * HEIGHT / len(self.display_list)
@@ -293,18 +300,23 @@ def load(url):
         show(body)
 
 def layout(text, width=WIDTH):
+    font = tkinter.font.Font()
     display_list = []
     cursor_x, cursor_y = HSTEP, VSTEP
-    for c in text:
-        if c == "\n":
+    for word in text.split():
+        word_width = font.measure(word)
+
+        if word == "\n":
             cursor_x = HSTEP
             cursor_y += VSTEP_NEWLINE
             continue
-        display_list.append((cursor_x, cursor_y, c))
-        cursor_x += HSTEP
-        if cursor_x > width - HSTEP:
+
+        if cursor_x + word_width > width - HSTEP:
             cursor_x = HSTEP
-            cursor_y += VSTEP
+            cursor_y += font.metrics("linespace") * 1.25
+        display_list.append((cursor_x, cursor_y, word))
+        cursor_x += word_width + font.measure(" ")
+
     return display_list
 
 if __name__ == "__main__":
