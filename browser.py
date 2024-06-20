@@ -17,11 +17,21 @@ class CacheEntry:
         self.expiry_time = time.time() + max_age if max_age is not None else None
     def is_expired(self):
         return self.expiry_time is not None and time.time() >= self.expiry_time
+    
+class Text:
+    def __init__(self, text):
+        self.text = text
+
+class Tag:
+    def __init__(self, tag):
+        self.tag = tag
 
 WIDTH, HEIGHT = 800, 600
 HSTEP, VSTEP = 13, 18
 VSTEP_NEWLINE = 24
 SCROLL_STEP = 100
+weight = "normal"
+style = "roman"
 
 class Browser:    
     def __init__(self):
@@ -49,14 +59,14 @@ class Browser:
     def draw(self):
         self.canvas.delete("all")
         self.can_scroll_down = False
-        for x, y, c in self.display_list:
+        for x, y, c, font in self.display_list:
             if y > self.scroll + HEIGHT:
                 self.can_scroll_down = True
                 continue
             if y + VSTEP < self.scroll: continue
             adjusted_y = y - self.scroll
             if adjusted_y >= 0:
-                self.canvas.create_text(x, adjusted_y, text=c, font="bi_times", anchor="nw")
+                self.canvas.create_text(x, adjusted_y, text=c, font=font, anchor="nw")
 
         scrollbar_height = HEIGHT / 8
         scrollbar_y = self.scroll * HEIGHT / len(self.display_list)
@@ -274,20 +284,26 @@ def show(body):
     print(res)
 
 def lex(body):
-    res = ""
+    out = []
+    buffer = ""
     in_tag = False
 
     for c in body:
         if c == "<":
             in_tag = True
+            if buffer:
+                out.append(Text(buffer))
+                buffer = ""
         elif c == ">":
             in_tag = False
-        elif not in_tag:
-            #print(c, end="")
-            res += c
+            out.append(Tag(buffer))
+            buffer = ""
+        else:
+            buffer += c
             
-    res = res.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&").replace("&nbsp;", " ")
-    return res
+    if not in_tag and buffer:
+        out.append(Text(buffer))
+    return out
 
 def view_source(body):
     print(body)
@@ -299,23 +315,34 @@ def load(url):
     else:
         show(body)
 
-def layout(text, width=WIDTH):
-    font = tkinter.font.Font()
+def layout(tokens, width=WIDTH):
+    global weight, style
     display_list = []
     cursor_x, cursor_y = HSTEP, VSTEP
-    for word in text.split():
-        word_width = font.measure(word)
+    for token in tokens:
+        if isinstance(token, Text):
+            font = tkinter.font.Font(size=16, weight=weight, slant=style)
+            for word in token.text.split():
+                word_width = font.measure(word)
 
-        if word == "\n":
-            cursor_x = HSTEP
-            cursor_y += VSTEP_NEWLINE
-            continue
+                if word == "\n":
+                    cursor_x = HSTEP
+                    cursor_y += VSTEP_NEWLINE
+                    continue
 
-        if cursor_x + word_width > width - HSTEP:
-            cursor_x = HSTEP
-            cursor_y += font.metrics("linespace") * 1.25
-        display_list.append((cursor_x, cursor_y, word))
-        cursor_x += word_width + font.measure(" ")
+                if cursor_x + word_width > width - HSTEP:
+                    cursor_x = HSTEP
+                    cursor_y += font.metrics("linespace") * 1.25
+                display_list.append((cursor_x, cursor_y, word, font))
+                cursor_x += word_width + font.measure(" ")
+        elif token.tag == "i":
+            style = "italic"
+        elif token.tag == "/i":
+            style = "roman"
+        elif token.tag == "b":
+            weight = "bold"
+        elif token.tag == "/b":
+            weight = "normal"
 
     return display_list
 
