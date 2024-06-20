@@ -8,6 +8,13 @@ import io
 import tkinter
 import tkinter.font
 
+WIDTH, HEIGHT = 800, 600
+HSTEP, VSTEP = 13, 18
+VSTEP_NEWLINE = 24
+SCROLL_STEP = 100
+weight = "normal"
+style = "roman"
+
 class RedirectLoopError(Exception):
     pass
 
@@ -26,12 +33,43 @@ class Tag:
     def __init__(self, tag):
         self.tag = tag
 
-WIDTH, HEIGHT = 800, 600
-HSTEP, VSTEP = 13, 18
-VSTEP_NEWLINE = 24
-SCROLL_STEP = 100
-weight = "normal"
-style = "roman"
+class Layout:
+    def __init__(self, tokens):
+        self.display_list = []
+        self.cursor_x, self.cursor_y = HSTEP, VSTEP
+        self.weight = "normal"
+        self.style = "roman"
+
+        for token in tokens:
+            self.process_token(token)
+    
+    def process_token(self, token):
+        if isinstance(token, Text):
+            for word in token.text.split():
+                self.process_word(word)
+        elif token.tag == "i":
+            self.style = "italic"
+        elif token.tag == "/i":
+            self.style = "roman"
+        elif token.tag == "b":
+            self.weight = "bold"
+        elif token.tag == "/b":
+            self.weight = "normal"
+    
+    def process_word(self, word):
+        font = tkinter.font.Font(size=16, weight=self.weight, slant=self.style)
+        word_width = font.measure(word)
+
+        if word == "\n":
+            self.cursor_x = HSTEP
+            self.cursor_y += VSTEP_NEWLINE
+            return
+
+        if self.cursor_x + word_width > WIDTH - HSTEP:
+            self.cursor_x = HSTEP
+            self.cursor_y += font.metrics("linespace") * 1.25
+        self.display_list.append((self.cursor_x, self.cursor_y, word, font))
+        self.cursor_x += word_width + font.measure(" ")
 
 class Browser:    
     def __init__(self):
@@ -52,9 +90,12 @@ class Browser:
     
     def load(self, url):
         body = url.request()
-        self.text = lex(body)
-        self.display_list = layout(self.text)
+        tokens = lex(body)
+        self.display_list = Layout(tokens).display_list
         self.draw()
+        """ self.text = lex(body)
+        self.display_list = layout(self.text)
+        self.draw() """
 
     def draw(self):
         self.canvas.delete("all")
@@ -90,7 +131,7 @@ class Browser:
 
     def resize(self, event):
         WIDTH, HEIGHT = event.width, event.height
-        self.display_list = layout(self.text, WIDTH)
+        #self.display_list = layout(self.text, WIDTH)
         self.draw()
 
 class URL:
@@ -314,37 +355,6 @@ def load(url):
         view_source(body)
     else:
         show(body)
-
-def layout(tokens, width=WIDTH):
-    global weight, style
-    display_list = []
-    cursor_x, cursor_y = HSTEP, VSTEP
-    for token in tokens:
-        if isinstance(token, Text):
-            font = tkinter.font.Font(size=16, weight=weight, slant=style)
-            for word in token.text.split():
-                word_width = font.measure(word)
-
-                if word == "\n":
-                    cursor_x = HSTEP
-                    cursor_y += VSTEP_NEWLINE
-                    continue
-
-                if cursor_x + word_width > width - HSTEP:
-                    cursor_x = HSTEP
-                    cursor_y += font.metrics("linespace") * 1.25
-                display_list.append((cursor_x, cursor_y, word, font))
-                cursor_x += word_width + font.measure(" ")
-        elif token.tag == "i":
-            style = "italic"
-        elif token.tag == "/i":
-            style = "roman"
-        elif token.tag == "b":
-            weight = "bold"
-        elif token.tag == "/b":
-            weight = "normal"
-
-    return display_list
 
 if __name__ == "__main__":
     #load(URL(sys.argv[1]))
