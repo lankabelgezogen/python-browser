@@ -39,9 +39,13 @@ class Layout:
         self.cursor_x, self.cursor_y = HSTEP, VSTEP
         self.weight = "normal"
         self.style = "roman"
+        self.size = 12
+        self.line = []
 
         for token in tokens:
             self.process_token(token)
+
+        self.flush_line()
     
     def process_token(self, token):
         if isinstance(token, Text):
@@ -55,9 +59,22 @@ class Layout:
             self.weight = "bold"
         elif token.tag == "/b":
             self.weight = "normal"
+        elif token.tag == "small":
+            self.size -= 2
+        elif token.tag == "/small":
+            self.size += 2
+        elif token.tag == "big":
+            self.size += 4
+        elif token.tag == "/big":
+            self.size -= 4
+        elif token.tag == "br":
+            self.flush_line()
+        elif token.tag == "p":
+            self.flush_line()
+            self.cursor_y += VSTEP
     
     def process_word(self, word):
-        font = tkinter.font.Font(size=16, weight=self.weight, slant=self.style)
+        font = tkinter.font.Font(size=self.size, weight=self.weight, slant=self.style)
         word_width = font.measure(word)
 
         if word == "\n":
@@ -66,10 +83,27 @@ class Layout:
             return
 
         if self.cursor_x + word_width > WIDTH - HSTEP:
+            self.flush_line()
             self.cursor_x = HSTEP
             self.cursor_y += font.metrics("linespace") * 1.25
         self.display_list.append((self.cursor_x, self.cursor_y, word, font))
         self.cursor_x += word_width + font.measure(" ")
+        self.line.append((self.cursor_x, word, font))
+
+    def flush_line(self):
+        if not self.line: return
+        metrics = [font.metrics() for x, word, font in self.line]
+        max_ascent = max([metric["ascent"] for metric in metrics])
+        baseline = self.cursor_y + 1.25 * max_ascent
+
+        for x, word, font in self.line:
+            y = baseline - font.metrics("ascent")
+            self.display_list.append((x, y, word, font))
+        
+        max_descent = max([metric["descent"] for metric in metrics])
+        self.cursor_y = baseline + 1.25 * max_descent
+        self.cursor_x = HSTEP
+        self.line = []
 
 class Browser:    
     def __init__(self):
@@ -93,9 +127,6 @@ class Browser:
         tokens = lex(body)
         self.display_list = Layout(tokens).display_list
         self.draw()
-        """ self.text = lex(body)
-        self.display_list = layout(self.text)
-        self.draw() """
 
     def draw(self):
         self.canvas.delete("all")
@@ -130,8 +161,8 @@ class Browser:
             self.scrollup(event)
 
     def resize(self, event):
+        global WIDTH, HEIGHT
         WIDTH, HEIGHT = event.width, event.height
-        #self.display_list = layout(self.text, WIDTH)
         self.draw()
 
 class URL:
